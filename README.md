@@ -93,10 +93,10 @@ doorauth_api_example.lua (optional)
 1. Enable HTTP requests in the CC:Tweaked server configuration.
 2. Push the project to GitHub. On each computer, download the installer from the repository and run it:
 	```text
-	wget https://raw.githubusercontent.com/prodbyshway/CC-AccessControl/main/installer.lua installer.lua
+	wget https://raw.githubusercontent.com/thaleius/CC-AccessControl/main/installer.lua installer.lua
 	installer.lua
 	```
-3. Select a program to install. It is also installed as `startup.lua` and launches automatically after reboot. Choose `U` to update installed programs and the installer, or `I` to update only the installer. Confirm before program files are overwritten; configuration data is left untouched.
+3. Select a program and choose whether to also copy it to `startup.lua` for automatic launch, or keep only its original filename. Choose `U` to update installed programs and the installer, or `I` to update only the installer. Confirm before program files are overwritten; configuration data is left untouched.
 4. When changing a script, push the update to the `main` branch before installing it. The installer fetches the files directly from GitHub.
 5. Run the selected program once - within 3 seconds, press any key to open its setup menu and adjust values (door tag, redstone side, protocol name, etc.), or let it auto-start with defaults.
 6. On `auth_server.lua`'s first run, set the admin PIN when prompted.

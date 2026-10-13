@@ -101,8 +101,18 @@ local function readStartupProgram()
   return nil
 end
 
-local function installFiles(downloads, startupProgram)
-  if startupProgram and downloads[startupProgram] then
+local function promptStartupChoice()
+  print("")
+  print("Install selected program as:")
+  print("1) startup.lua (run automatically at boot)")
+  print("2) original filename only")
+  write("Choice [2]: ")
+  local choice = read():lower()
+  return choice == "1" or choice == "y" or choice == "yes"
+end
+
+local function installFiles(downloads, startupProgram, createStartup)
+  if createStartup and startupProgram and downloads[startupProgram] then
     downloads[STARTUP_FILE] = downloads[startupProgram]
   end
 
@@ -131,7 +141,7 @@ local function installFiles(downloads, startupProgram)
     handle.close()
   end
 
-  if startupProgram then
+  if createStartup and startupProgram then
     local handle = fs.open(STARTUP_MANIFEST, "w")
     if not handle then
       print("Could not save startup program information.")
@@ -153,6 +163,7 @@ if not selected then return end
 
 local files = {}
 local startupProgram
+local createStartup = false
 if selected.updateInstaller then
   files = {"installer.lua"}
 elseif selected.update then
@@ -169,6 +180,7 @@ elseif selected.update then
     foundProgram = true
   end
   startupProgram = readStartupProgram()
+  createStartup = startupProgram ~= nil
   if startupProgram and not fs.exists(startupProgram) then
     files[#files + 1] = startupProgram
     foundProgram = true
@@ -183,6 +195,7 @@ else
     files[#files + 1] = filename
   end
   startupProgram = selected.files[1]
+  createStartup = promptStartupChoice()
 end
 
 print("")
@@ -192,9 +205,11 @@ if not downloads then
   return
 end
 
-if installFiles(downloads, startupProgram) then
-  if startupProgram then
+if installFiles(downloads, startupProgram, createStartup) then
+  if startupProgram and createStartup then
     print("Installed "..startupProgram.." as "..STARTUP_FILE..".")
+  elseif startupProgram then
+    print("Installed "..startupProgram.." under its original filename.")
   else
     print("Update complete.")
   end
