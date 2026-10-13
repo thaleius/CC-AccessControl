@@ -91,13 +91,13 @@ doorauth_api_example.lua (optional)
 
 ## 🚀 Installation
 1. Enable HTTP requests in the CC:Tweaked server configuration.
-2. Upload `installer.lua` to Pastebin once. On each computer, download it with the Pastebin ID you receive, then run it:
+2. Push the project to GitHub. On each computer, download the installer from the repository and run it:
 	```text
-	pastebin get <INSTALLER_PASTE_ID> installer.lua
+	wget https://raw.githubusercontent.com/prodbyshway/CC-AccessControl/main/installer.lua installer.lua
 	installer.lua
 	```
 3. Select a program to install. It is also installed as `startup.lua` and launches automatically after reboot. Choose `U` to update installed programs and the installer, or `I` to update only the installer. Confirm before program files are overwritten; configuration data is left untouched.
-4. When changing a script, update its Pastebin content before distributing it. The installer fetches the contents at the configured IDs, not the local workspace files.
+4. When changing a script, push the update to the `main` branch before installing it. The installer fetches the files directly from GitHub.
 5. Run the selected program once - within 3 seconds, press any key to open its setup menu and adjust values (door tag, redstone side, protocol name, etc.), or let it auto-start with defaults.
 6. On `auth_server.lua`'s first run, set the admin PIN when prompted.
 7. Set the **same**, non-default `registration_secret` in `auth_server`, every `door_controller`, and `lockdown_alarm`. It authenticates controller registration and emergency lockdown requests.

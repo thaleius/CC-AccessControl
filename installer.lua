@@ -1,17 +1,17 @@
 -- DoorAuth installer for CC:Tweaked.
 
-local PASTE_IDS = {
-  ["config_util.lua"] = "9Gz1wNAK",
-  ["auth_server.lua"] = "hADyPATn",
-  ["admin_remote.lua"] = "XaRdcjDZ",
-  ["door_controller.lua"] = "dHrWSM3j",
-  ["door_fob.lua"] = "zUa2XX7E",
-  ["keypad_door.lua"] = "dL7hXJfc",
-  ["lockdown_alarm.lua"] = "Y6EfwTGn",
-  ["installer.lua"] = "5mpMznRt",
+local GITHUB_RAW_URL = "https://raw.githubusercontent.com/thaleius/CC-AccessControl/main/"
+local DOWNLOADABLE_FILES = {
+  ["config_util.lua"] = true,
+  ["auth_server.lua"] = true,
+  ["admin_remote.lua"] = true,
+  ["door_controller.lua"] = true,
+  ["door_fob.lua"] = true,
+  ["keypad_door.lua"] = true,
+  ["lockdown_alarm.lua"] = true,
+  ["installer.lua"] = true,
 }
 
-local PASTEBIN_RAW_URL = "https://pastebin.com/raw/"
 local STARTUP_FILE = "startup.lua"
 local STARTUP_MANIFEST = "doorauth_startup.txt"
 
@@ -63,13 +63,12 @@ local function fetchFiles(files)
   local downloads = {}
   for _, filename in ipairs(files) do
     write("Downloading "..filename.."... ")
-    local pasteId = PASTE_IDS[filename]
-    if not pasteId then
-      print("no Pastebin ID configured")
+    if not DOWNLOADABLE_FILES[filename] then
+      print("unknown file")
       return nil
     end
 
-    local response, err = http.get(PASTEBIN_RAW_URL..pasteId)
+    local response, err = http.get(GITHUB_RAW_URL..filename)
     if not response then
       print("failed")
       print(tostring(err or "HTTP request failed"))
@@ -96,7 +95,10 @@ local function readStartupProgram()
   if not handle then return nil end
   local filename = handle.readAll()
   handle.close()
-  return PASTE_IDS[filename] and filename or nil
+  for _, program in ipairs(PROGRAM_FILES) do
+    if program == filename then return filename end
+  end
+  return nil
 end
 
 local function installFiles(downloads, startupProgram)
