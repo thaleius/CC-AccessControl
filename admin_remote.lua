@@ -277,7 +277,7 @@ local function doorsMenu(session)
       else
         print("No response.")
       end
-      print("\nPress Enter…") read()
+      print("\nPress Enter...") read()
 
     elseif c=="2" then
       write("Door tag: ") local tag=read()
@@ -290,7 +290,7 @@ local function doorsMenu(session)
       else
         print("No such door.")
       end
-      print("\nPress Enter…") read()
+      print("\nPress Enter...") read()
 
     elseif c=="3" then
       write("Door tag: ") local tag=read()
@@ -346,14 +346,14 @@ local function issueCardFlow(session)
   if isPocketComputer() then
     print("Pocket computers can't drive a card manipulator.")
     print("Token (write this down): "..msg.token)
-    print("\nPress Enter…") read()
+    print("\nPress Enter...") read()
     return
   end
 
   local readerName, reader = findCardWriter()
   if not reader then
     print("No card manipulator found. Token: "..msg.token)
-    print("\nPress Enter…") read()
+    print("\nPress Enter...") read()
     return
   end
 
@@ -366,7 +366,7 @@ local function issueCardFlow(session)
     print("Rolling back issued token...")
     adminCmd(session, {cmd="user_card_clear", name=name})
   end
-  print("\nPress Enter…") read()
+  print("\nPress Enter...") read()
 end
 
 local function usersMenu(session)
@@ -403,7 +403,7 @@ local function usersMenu(session)
       else
         print("No response.")
       end
-      print("\nPress Enter…") read()
+      print("\nPress Enter...") read()
 
     elseif c=="2" then
       write("User name: ") local name=read()
@@ -417,7 +417,7 @@ local function usersMenu(session)
       else
         print("No such user.")
       end
-      print("\nPress Enter…") read()
+      print("\nPress Enter...") read()
 
     elseif c=="3" then
       write("User name: ") local name=read()
@@ -459,7 +459,7 @@ local function usersMenu(session)
       else
         print("No response.")
       end
-      print("\nPress Enter…") read()
+      print("\nPress Enter...") read()
 
     elseif c=="8" then
       issueCardFlow(session)
@@ -504,7 +504,7 @@ local function usersMenu(session)
       else
         print("No response.")
       end
-      print("\nPress Enter…") read()
+      print("\nPress Enter...") read()
 
     elseif c=="14" or c=="" then
       return
@@ -572,7 +572,7 @@ Logs     - view the server's audit log
 Sessions auto-renew using your PIN if they expire while
 this program is running.
 ]])
-  print("Press Enter…") read()
+  print("Press Enter...") read()
 end
 
 ---------------------------------------------------
