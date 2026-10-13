@@ -54,7 +54,7 @@ local fields = {
   {key="heartbeat_rate", label="Heartbeat rate (s)"},
   {key="log_max", label="Max log entries"},
   {key="registration_secret", label="Controller registration secret",
-    help="Every door_controller must send this to register. Change it from the default!"},
+    help="Shared by door_controller and lockdown_alarm. Change it from the default!"},
   {key="verify_max_attempts", label="Verify: attempts before lockout"},
   {key="verify_window_sec", label="Verify: attempt window (s)"},
   {key="verify_lock_base_sec", label="Verify: base lockout (s)"},
@@ -803,6 +803,16 @@ local function handleMessage(sender,msg,proto)
   -- remote admin first
   if handleRemoteAdmin(sender,msg) then return end
 
+  if msg.type=="emergency_lockdown" then
+    if msg.secret == REGISTRATION_SECRET then
+      lockdown = true
+      logEvent({event="lockdown_on",ok=true,source="emergency_alarm#"..sender})
+    else
+      logEvent({event="emergency_lockdown_rejected",ok=false,source="emergency_alarm#"..sender})
+    end
+    return
+  end
+
   -------- door_list (for door_fob) --------
   if msg.type=="door_list" then
     local tags={}
@@ -1243,7 +1253,8 @@ end
 
 ------------------- Main -------------------
 term.setTextColor(colors.cyan)
-print("[DoorAuth Server] starting...")
+print(('[DoorAuth Server] Host="%s" Protocol="%s" Computer #%d'):format(
+  HOST_NAME, PROTOCOL, os.getComputerID()))
 term.setTextColor(colors.white)
 
 config_util.randomSeedOnce()

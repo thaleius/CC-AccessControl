@@ -13,6 +13,8 @@ local defaults = {
   request_timeout = 3,
   poll_interval   = 2,
   output_side     = "back",
+  emergency_input_side = "top",
+  registration_secret = "change-me-registration-secret",
 }
 
 local fields = {
@@ -22,6 +24,10 @@ local fields = {
   {key="poll_interval", label="Poll interval (s)"},
   {key="output_side", label="Redstone output side",
     help="A side name (top/bottom/left/right/front/back) or 'all'."},
+  {key="emergency_input_side", label="Emergency button input side",
+    help="A redstone button or lever on this side triggers lockdown."},
+  {key="registration_secret", label="Emergency registration secret",
+    help="Must match auth_server's registration_secret."},
 }
 
 local cfg = config_util.load("lockdown_alarm", defaults, fields, "Lockdown Alarm Config")
@@ -31,6 +37,8 @@ local SERVER_NAME       = cfg.server_name
 local REQUEST_TIMEOUT   = cfg.request_timeout
 local POLL_INTERVAL     = math.max(0.5, tonumber(cfg.poll_interval) or 2)
 local OUTPUT_SIDE       = config_util.trim(cfg.output_side or "back"):lower()
+local INPUT_SIDE        = config_util.trim(cfg.emergency_input_side or "top"):lower()
+local REGISTRATION_SECRET = cfg.registration_secret
 ---------------------------------
 
 local validSides = {}
@@ -38,6 +46,14 @@ for _, side in ipairs(rs.getSides()) do validSides[side] = true end
 if OUTPUT_SIDE ~= "all" and not validSides[OUTPUT_SIDE] then
   print("[Alarm] Invalid output_side '"..OUTPUT_SIDE.."', falling back to 'back'.")
   OUTPUT_SIDE = "back"
+end
+
+local emergencyInputEnabled = validSides[INPUT_SIDE]
+if not emergencyInputEnabled then
+  print("[Alarm] Invalid emergency_input_side '"..INPUT_SIDE.."'; emergency trigger disabled.")
+elseif OUTPUT_SIDE == "all" or OUTPUT_SIDE == INPUT_SIDE then
+  print("[Alarm] Emergency input must be separate from the alarm output; emergency trigger disabled.")
+  emergencyInputEnabled = false
 end
 
 local function setAlarm(active)
@@ -58,7 +74,7 @@ local function playAlarmTone()
 end
 
 local function requestStatus()
-  local server = config_util.findServer(PROTOCOL, SERVER_NAME)
+  local server = config_util.findServer(PROTOCOL, SERVER_NAME, 10)
   if not server then return nil, "Server offline." end
 
   rednet.send(server, {type="status"}, PROTOCOL)
@@ -76,6 +92,7 @@ local function drawScreen(stateText, lockdown)
   print("Server:      "..SERVER_NAME)
   print("Protocol:    "..PROTOCOL)
   print("Output side: "..OUTPUT_SIDE)
+  print("Emergency input: "..(emergencyInputEnabled and INPUT_SIDE or "disabled"))
   print("Lockdown:    "..tostring(lockdown))
   print("Alarm:       "..stateText)
 end
@@ -86,20 +103,48 @@ config_util.openModems()
 setAlarm(true)
 drawScreen("SIGNAL ON (no server contact yet)", "unknown")
 
-while true do
-  local msg, err = requestStatus()
-  local alarmActive
+local function statusLoop()
+  while true do
+    local msg, err = requestStatus()
+    local alarmActive
 
-  if msg and type(msg.lockdown) == "boolean" then
-    alarmActive = msg.lockdown
-    setAlarm(alarmActive)
-    drawScreen(alarmActive and "SIGNAL ON" or "signal off", alarmActive)
-  else
-    alarmActive = true
-    setAlarm(true)
-    drawScreen("SIGNAL ON (server offline: "..tostring(err)..")", "unknown")
+    if msg and type(msg.lockdown) == "boolean" then
+      alarmActive = msg.lockdown
+      setAlarm(alarmActive)
+      drawScreen(alarmActive and "SIGNAL ON" or "signal off", alarmActive)
+    else
+      alarmActive = true
+      setAlarm(true)
+      drawScreen("SIGNAL ON (server offline: "..tostring(err)..")", "unknown")
+    end
+
+    if alarmActive then playAlarmTone() end
+    sleep(POLL_INTERVAL)
+  end
+end
+
+local function emergencyInputLoop()
+  if not emergencyInputEnabled then
+    while true do sleep(60) end
   end
 
-  if alarmActive then playAlarmTone() end
-  sleep(POLL_INTERVAL)
+  local wasPressed = redstone.getInput(INPUT_SIDE)
+  local function sendEmergencyRequest()
+    local server = config_util.findServer(PROTOCOL, SERVER_NAME, 10)
+    if not server then return end
+    rednet.send(server, {
+      type="emergency_lockdown",
+      secret=REGISTRATION_SECRET,
+    }, PROTOCOL)
+  end
+
+  if wasPressed then sendEmergencyRequest() end
+  while true do
+    os.pullEvent("redstone")
+    local isPressed = redstone.getInput(INPUT_SIDE)
+    if isPressed and not wasPressed then sendEmergencyRequest() end
+    wasPressed = isPressed
+  end
 end
+
+parallel.waitForAny(statusLoop, emergencyInputLoop)

@@ -24,6 +24,7 @@ local cfg = config_util.load("door_fob", defaults, fields, "Door Fob Config")
 local PROTOCOL        = cfg.protocol
 local SERVER_NAME      = cfg.server_name
 local REQUEST_TIMEOUT  = cfg.request_timeout
+local SERVER_LOOKUP_ATTEMPTS = 10
 ---------------------------------
 
 local trim = config_util.trim
@@ -32,8 +33,11 @@ local trim = config_util.trim
 -- UTILS
 ---------------------------------------------------
 local function getDoorList()
-  local server = config_util.findServer(PROTOCOL, SERVER_NAME)
-  if not server then return nil, "Server offline." end
+  local server = config_util.findServer(PROTOCOL, SERVER_NAME, SERVER_LOOKUP_ATTEMPTS)
+  if not server then
+    return nil, ("Server '%s' not found on protocol '%s'. Check modem and matching server/client config.")
+      :format(SERVER_NAME, PROTOCOL)
+  end
 
   rednet.send(server, {type="door_list"}, PROTOCOL)
   local id, msg = rednet.receive(PROTOCOL, REQUEST_TIMEOUT)
@@ -67,8 +71,11 @@ local function askCredential()
 end
 
 local function sendVerify(tag, code)
-  local server = config_util.findServer(PROTOCOL, SERVER_NAME)
-  if not server then return nil, "Server offline." end
+  local server = config_util.findServer(PROTOCOL, SERVER_NAME, SERVER_LOOKUP_ATTEMPTS)
+  if not server then
+    return nil, ("Server '%s' not found on protocol '%s'. Check modem and matching server/client config.")
+      :format(SERVER_NAME, PROTOCOL)
+  end
 
   rednet.send(server, {
     type="verify",

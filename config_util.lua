@@ -58,8 +58,14 @@ function openModems()
   end
 end
 
-function findServer(protocol, name)
-  return rednet.lookup(protocol, name)
+function findServer(protocol, name, attempts)
+  attempts = math.max(1, math.floor(tonumber(attempts) or 1))
+  for attempt = 1, attempts do
+    local server = rednet.lookup(protocol, name)
+    if server then return server end
+    if attempt < attempts then sleep(0.5) end
+  end
+  return nil
 end
 
 ----------------------------------------------------------------

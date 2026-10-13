@@ -57,6 +57,8 @@ Every other script loads this with `os.loadAPI("config_util.lua")`. It provides:
 ### 6. Lockdown Alarm — `lockdown_alarm.lua`
 - Polls the server for lockdown state and drives a redstone output (or all sides) to match
 - Repeats an audible tone during lockdown when a speaker peripheral is attached
+- A redstone button or lever on the configured emergency input side triggers a server-wide lockdown
+- Uses the server's `registration_secret` to authenticate emergency triggers
 - **Fails closed**: if it can't reach the server, the alarm output turns **on** rather than silently going quiet
 
 ### 7. Door Fob (Player Access Device) — `door_fob.lua`
@@ -74,6 +76,7 @@ Loadable with `os.loadAPI("doorauth_api_example.lua")` for scripting the admin A
 - Wired/Wireless modems
 - Pocket computers
 - A card-reader/writer peripheral (optional, for magnetic-card credentials)
+- A redstone button or lever and optional speaker for the lockdown alarm
 
 ## 📦 Included Files
 config_util.lua (shared library)
@@ -97,7 +100,7 @@ doorauth_api_example.lua (optional)
 4. When changing a script, update its Pastebin content before distributing it. The installer fetches the contents at the configured IDs, not the local workspace files.
 5. Run the selected program once - within 3 seconds, press any key to open its setup menu and adjust values (door tag, redstone side, protocol name, etc.), or let it auto-start with defaults.
 6. On `auth_server.lua`'s first run, set the admin PIN when prompted.
-7. Set the **same** `registration_secret` in `auth_server`'s config and in every `door_controller`'s config - this is what stops an arbitrary computer from registering itself as a door controller. Change it from the default.
+7. Set the **same**, non-default `registration_secret` in `auth_server`, every `door_controller`, and `lockdown_alarm`. It authenticates controller registration and emergency lockdown requests.
 8. Attach modems and wiring; reboot all devices.
 
 ## 🧪 Testing Procedure
@@ -107,8 +110,9 @@ doorauth_api_example.lua (optional)
 4. Log in via `admin_remote.lua`, add a door PIN and/or a user with a code, test both
 5. Issue a user a card token (with or without a card manipulator attached) and test it
 6. Trigger a lockout by entering a wrong code repeatedly, confirm it clears after the configured window
-7. Lockdown test, including the `lockdown_alarm.lua` client if used
-8. Check audit logs
+7. Compare the server's displayed host/protocol with the client configs; they must match and all computers need a connected modem.
+8. Test lockdown from `admin_remote.lua` and by pressing the configured emergency input on `lockdown_alarm.lua`; confirm the redstone output and speaker respond.
+9. Check audit logs
 
 ## 🔐 Security Model
 - The server holds all credentials as salted hashes (or, for card tokens, hashed against a server-wide pepper for O(1) lookup) - nothing is stored or sent as plaintext at rest

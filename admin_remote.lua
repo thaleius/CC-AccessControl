@@ -23,6 +23,7 @@ local cfg = config_util.load("admin_remote", defaults, fields, "Admin Remote Con
 local PROTOCOL        = cfg.protocol
 local SERVER_NAME      = cfg.server_name
 local REQUEST_TIMEOUT  = cfg.request_timeout
+local SERVER_LOOKUP_ATTEMPTS = 10
 ---------------------------------
 
 local trim = config_util.trim
@@ -78,8 +79,11 @@ end
 -- LOGIN
 ---------------------------------------------------
 local function loginWithPin(pin)
-  local server = config_util.findServer(PROTOCOL, SERVER_NAME)
-  if not server then return nil, "Server not found." end
+  local server = config_util.findServer(PROTOCOL, SERVER_NAME, SERVER_LOOKUP_ATTEMPTS)
+  if not server then
+    return nil, ("Server '%s' not found on protocol '%s'. Check modem and matching server/client config.")
+      :format(SERVER_NAME, PROTOCOL)
+  end
 
   rednet.send(server, {type="admin_login_challenge"}, PROTOCOL)
   local id, msg = rednet.receive(PROTOCOL, REQUEST_TIMEOUT)
@@ -125,9 +129,10 @@ end
 -- SEND ADMIN CMD (with one auto-relogin on expiry)
 ---------------------------------------------------
 local function adminCmd(session, cmdTable)
-  local server = config_util.findServer(PROTOCOL, SERVER_NAME)
+  local server = config_util.findServer(PROTOCOL, SERVER_NAME, SERVER_LOOKUP_ATTEMPTS)
   if not server then
-    print("Server offline.")
+    print(("Server '%s' not found on protocol '%s'. Check modem and matching server/client config.")
+      :format(SERVER_NAME, PROTOCOL))
     sleep(1)
     return nil
   end
