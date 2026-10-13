@@ -110,7 +110,7 @@ local function drawKeypad(mon, layout)
   if sharedState.lockdown then
     mon.setCursorPos(2, pinY+1)
     mon.setTextColor(colors.red)
-    mon.write("** LOCKDOWN ACTIVE **")
+    mon.write("** LOCKDOWN **")
     mon.setTextColor(colors.white)
   end
 
