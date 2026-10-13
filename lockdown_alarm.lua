@@ -67,9 +67,39 @@ local function setAlarm(active)
 end
 
 local speaker = peripheral.find("speaker")
-local function playAlarmTone()
-  if speaker then
-    pcall(speaker.playNote, "Pling", 1, 12)
+local alarmActive = true
+
+local function makeSawtoothWave(frequency)
+  local sampleRate = 48000
+  local samples = {}
+  for index = 0, sampleRate / 2 - 1 do
+    local phase = (index * frequency / sampleRate) % 1
+    samples[index + 1] = math.floor(phase * 255) - 127
+  end
+  return samples
+end
+
+local function waitForAudioChunk()
+  local timer = os.startTimer(0.1)
+  while alarmActive do
+    local event, parameter = os.pullEvent()
+    if event == "speaker_audio_empty" then return true end
+    if event == "timer" and parameter == timer then return false end
+  end
+  return false
+end
+
+local function playAudioChunk(samples)
+  while alarmActive do
+    local ok, queued = pcall(speaker.playAudio, samples, 1)
+    if not ok then return end
+    if queued then
+      while alarmActive do
+        if waitForAudioChunk() then return end
+      end
+      return
+    end
+    waitForAudioChunk()
   end
 end
 
@@ -89,12 +119,12 @@ local function drawScreen(stateText, lockdown)
   term.clear()
   term.setCursorPos(1,1)
   print("=== DoorAuth Lockdown Alarm ===")
-  print("Server:      "..SERVER_NAME)
-  print("Protocol:    "..PROTOCOL)
-  print("Output side: "..OUTPUT_SIDE)
+  print("Server:          "..SERVER_NAME)
+  print("Protocol:        "..PROTOCOL)
+  print("Output side:     "..OUTPUT_SIDE)
   print("Emergency input: "..(emergencyInputEnabled and INPUT_SIDE or "disabled"))
-  print("Lockdown:    "..tostring(lockdown))
-  print("Alarm:       "..stateText)
+  print("Lockdown:        "..tostring(lockdown))
+  print("Alarm:           "..stateText)
 end
 
 config_util.openModems()
@@ -106,11 +136,11 @@ drawScreen("SIGNAL ON (no server contact yet)", "unknown")
 local function statusLoop()
   while true do
     local msg, err = requestStatus()
-    local alarmActive
 
     if msg and type(msg.lockdown) == "boolean" then
       alarmActive = msg.lockdown
       setAlarm(alarmActive)
+      if not alarmActive and speaker then pcall(speaker.stop) end
       drawScreen(alarmActive and "SIGNAL ON" or "signal off", alarmActive)
     else
       alarmActive = true
@@ -118,8 +148,30 @@ local function statusLoop()
       drawScreen("SIGNAL ON (server offline: "..tostring(err)..")", "unknown")
     end
 
-    if alarmActive then playAlarmTone() end
     sleep(POLL_INTERVAL)
+  end
+end
+
+local function sirenLoop()
+  if not speaker then
+    while true do sleep(60) end
+  end
+
+  local samples1960 = makeSawtoothWave(1960)
+  local samples980 = makeSawtoothWave(980)
+  while true do
+    if alarmActive then
+      for index = 1, 8 do
+        if not alarmActive then break end
+        playAudioChunk(index % 2 == 1 and samples1960 or samples980)
+      end
+      for _ = 1, 5 do
+        if not alarmActive then break end
+        playAudioChunk(samples980)
+      end
+    else
+      sleep(0.1)
+    end
   end
 end
 
@@ -147,4 +199,4 @@ local function emergencyInputLoop()
   end
 end
 
-parallel.waitForAny(statusLoop, emergencyInputLoop)
+parallel.waitForAny(statusLoop, emergencyInputLoop, sirenLoop)
