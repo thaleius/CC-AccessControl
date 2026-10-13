@@ -50,6 +50,13 @@ local function setAlarm(active)
   end
 end
 
+local speaker = peripheral.find("speaker")
+local function playAlarmTone()
+  if speaker then
+    pcall(speaker.playNote, "Pling", 1, 12)
+  end
+end
+
 local function requestStatus()
   local server = config_util.findServer(PROTOCOL, SERVER_NAME)
   if not server then return nil, "Server offline." end
@@ -81,14 +88,18 @@ drawScreen("SIGNAL ON (no server contact yet)", "unknown")
 
 while true do
   local msg, err = requestStatus()
+  local alarmActive
 
   if msg and type(msg.lockdown) == "boolean" then
-    setAlarm(msg.lockdown)
-    drawScreen(msg.lockdown and "SIGNAL ON" or "signal off", msg.lockdown)
+    alarmActive = msg.lockdown
+    setAlarm(alarmActive)
+    drawScreen(alarmActive and "SIGNAL ON" or "signal off", alarmActive)
   else
+    alarmActive = true
     setAlarm(true)
     drawScreen("SIGNAL ON (server offline: "..tostring(err)..")", "unknown")
   end
 
+  if alarmActive then playAlarmTone() end
   sleep(POLL_INTERVAL)
 end

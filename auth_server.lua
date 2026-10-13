@@ -907,39 +907,104 @@ end
 
 ---------------- Console -------------------
 local function help()
-  print([[Commands:
-  help
-  controllers
-  save
-  reboot
-  cls
+  local lines = {}
+  local colorTerminal = term.isColor and term.isColor()
+  local function addLine(text, color)
+    lines[#lines + 1] = {text=text, color=color}
+  end
+  local function heading(label)
+    addLine("")
+    addLine(label, colorTerminal and colors.cyan or nil)
+  end
 
-  -- Door commands (admin) --
-  add <tag> <pin>
-  del <tag> <pin>
-  opentime <tag> <seconds>
-  remove <tag>
-  show <tag>
-  list
-  lockdown_on
-  lockdown_off
-  logs
+  addLine("=== DoorAuth Server Help ===", colorTerminal and colors.yellow or nil)
+  heading("General")
+  addLine("help                         Show this help")
+  addLine("cls / clear                  Clear the console")
+  addLine("controllers                  List registered controllers")
+  addLine("save                         Save database and audit log")
+  addLine("reboot                       Save data and reboot")
+  addLine("logs                         Show the latest audit entries")
 
-  -- User commands (admin) --
-  users
-  user_show <name>
-  user_add <name> <code>
-  user_del <name>
-  user_clear_code <name>
-  user_clear_doors <name>
-  user_enable <name> <tag>
-  user_disable <name> <tag>
-  user_doors <name>
-  user_card_issue <name>
-  user_card_clear <name>
-  user_clone <source> <target> [yes|no]
-  user_search <query>
-]])
+  heading("Doors (admin PIN required)")
+  addLine("list                         List doors and PIN counts")
+  addLine("show <tag>                   Show door settings")
+  addLine("add <tag> <pin>              Add a door PIN")
+  addLine("del <tag> <pin>              Remove a door PIN")
+  addLine("opentime <tag> <seconds>     Set door open duration")
+  addLine("remove <tag>                 Remove a door")
+
+  heading("Security (admin PIN required)")
+  addLine("lockdown_on                  Enable global lockdown")
+  addLine("lockdown_off                 Disable global lockdown")
+
+  heading("Users (admin PIN required)")
+  addLine("users                        List users")
+  addLine("user_show <name>             Show user access")
+  addLine("user_add <name> <code>       Add or change a user code")
+  addLine("user_del <name>              Remove a user")
+  addLine("user_clear_code <name>       Clear a user's code")
+  addLine("user_clear_doors <name>      Clear door access")
+  addLine("user_enable <name> <tag>     Allow access to a door")
+  addLine("user_disable <name> <tag>    Revoke access to a door")
+  addLine("user_doors <name>            List a user's doors")
+  addLine("user_card_issue <name>       Issue a card token")
+  addLine("user_card_clear <name>      Revoke a card token")
+  addLine("user_clone <src> <dst> [yes]")
+  addLine("  Optional yes also copies the code.")
+  addLine("user_search [text]           Search names and doors")
+
+  local width, height = term.getSize()
+  local displayLines = {}
+  for _, line in ipairs(lines) do
+    local text = line.text
+    if text == "" then
+      displayLines[#displayLines + 1] = line
+    else
+      while #text > width do
+        local breakAt = text:sub(1, width):match(".*() ")
+        if breakAt and breakAt > 1 then
+          displayLines[#displayLines + 1] = {
+            text=text:sub(1, breakAt - 1), color=line.color,
+          }
+          text = text:sub(breakAt + 1)
+        else
+          displayLines[#displayLines + 1] = {
+            text=text:sub(1, width), color=line.color,
+          }
+          text = text:sub(width + 1)
+        end
+        text = text:gsub("^%s+", "")
+      end
+      displayLines[#displayLines + 1] = {text=text, color=line.color}
+    end
+  end
+
+  local pageSize = math.max(1, height - 2)
+  local first = 1
+  while first <= #displayLines do
+    term.clear()
+    term.setCursorPos(1, 1)
+    local last = math.min(first + pageSize - 1, #displayLines)
+    for index = first, last do
+      local line = displayLines[index]
+      if colorTerminal and line.color then term.setTextColor(line.color) end
+      print(line.text)
+      if colorTerminal and line.color then term.setTextColor(colors.white) end
+    end
+
+    if last < #displayLines then
+      if colorTerminal then term.setTextColor(colors.yellow) end
+      write("Enter: next page | Q: close")
+      if colorTerminal then term.setTextColor(colors.white) end
+      if read():lower() == "q" then break end
+      first = last + 1
+    else
+      write("Enter: close")
+      read()
+      break
+    end
+  end
 end
 
 local function printLogsConsole(maxLines)

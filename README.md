@@ -56,6 +56,7 @@ Every other script loads this with `os.loadAPI("config_util.lua")`. It provides:
 
 ### 6. Lockdown Alarm — `lockdown_alarm.lua`
 - Polls the server for lockdown state and drives a redstone output (or all sides) to match
+- Repeats an audible tone during lockdown when a speaker peripheral is attached
 - **Fails closed**: if it can't reach the server, the alarm output turns **on** rather than silently going quiet
 
 ### 7. Door Fob (Player Access Device) — `door_fob.lua`
@@ -76,6 +77,7 @@ Loadable with `os.loadAPI("doorauth_api_example.lua")` for scripting the admin A
 
 ## 📦 Included Files
 config_util.lua (shared library)
+installer.lua
 auth_server.lua
 door_controller.lua
 keypad_door.lua
@@ -85,12 +87,18 @@ lockdown_alarm.lua
 doorauth_api_example.lua (optional)
 
 ## 🚀 Installation
-1. Copy `config_util.lua` onto **every** computer that will run any other DoorAuth script.
-2. Install the relevant program(s) on each device.
-3. Run each script once - within 3 seconds, press any key to open its setup menu and adjust values (door tag, redstone side, protocol name, etc.), or let it auto-start with defaults.
-4. On `auth_server.lua`'s first run, set the admin PIN when prompted.
-5. Set the **same** `registration_secret` in `auth_server`'s config and in every `door_controller`'s config - this is what stops an arbitrary computer from registering itself as a door controller. Change it from the default.
-6. Attach modems and wiring; reboot all devices.
+1. Enable HTTP requests in the CC:Tweaked server configuration.
+2. Upload `installer.lua` to Pastebin once. On each computer, download it with the Pastebin ID you receive, then run it:
+	```text
+	pastebin get <INSTALLER_PASTE_ID> installer.lua
+	installer.lua
+	```
+3. Select a program to install. It is also installed as `startup.lua` and launches automatically after reboot. Choose `U` to update installed programs and the installer, or `I` to update only the installer. Confirm before program files are overwritten; configuration data is left untouched.
+4. When changing a script, update its Pastebin content before distributing it. The installer fetches the contents at the configured IDs, not the local workspace files.
+5. Run the selected program once - within 3 seconds, press any key to open its setup menu and adjust values (door tag, redstone side, protocol name, etc.), or let it auto-start with defaults.
+6. On `auth_server.lua`'s first run, set the admin PIN when prompted.
+7. Set the **same** `registration_secret` in `auth_server`'s config and in every `door_controller`'s config - this is what stops an arbitrary computer from registering itself as a door controller. Change it from the default.
+8. Attach modems and wiring; reboot all devices.
 
 ## 🧪 Testing Procedure
 1. Start the auth server

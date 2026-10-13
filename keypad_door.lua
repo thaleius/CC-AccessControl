@@ -41,6 +41,7 @@ local STATUS_POLL_INTERVAL  = cfg.status_poll_interval
 local trim = config_util.trim
 
 local sharedState = { lockdown = false }
+local requestStatus
 
 -- ---------- Card reader ----------
 local function findCardManipulator()
@@ -149,7 +150,7 @@ local function drawKeypad(mon, layout)
 end
 
 -- ---------- Keypad Loop ----------
-local function keypadLoop(mon)
+local function keypadLoop(mon, server)
   tryScales(mon, {0.5, 0.75, 1})
   local w,h = mon.getSize()
   local layout = decideLayout(w,h)
@@ -199,20 +200,27 @@ local function keypadLoop(mon)
       elseif keyCode == keys.enter then return pin end
 
     elseif event == "timer" and p1 == statusTimer then
+      requestStatus(server)
       geo = drawKeypad(mon, layout)
       refreshPIN()
       statusTimer = os.startTimer(STATUS_POLL_INTERVAL)
+
+    elseif event == "rednet_message" then
+      local sender, msg, protocol = p1, p2, p3
+      if sender == server and protocol == PROTOCOL
+         and type(msg) == "table" and msg.type == "status_result"
+         and type(msg.lockdown) == "boolean" then
+        sharedState.lockdown = msg.lockdown
+        geo = drawKeypad(mon, layout)
+        refreshPIN()
+      end
     end
   end
 end
 
 -- ---------- Verify ----------
-local function requestStatus(server)
+requestStatus = function(server)
   rednet.send(server, {type="status", tag=DOOR_TAG}, PROTOCOL)
-  local id, msg = rednet.receive(PROTOCOL, REQUEST_TIMEOUT)
-  if id == server and type(msg)=="table" and msg.type=="status_result" then
-    sharedState.lockdown = msg.lockdown or false
-  end
 end
 
 local function verifyWithServer(serverID, tag, code)
@@ -255,7 +263,7 @@ local function main()
       code = cardCode
       if not cardCode and mon then drawKeypad(mon, decideLayout(mon.getSize())) end
     else
-      code = mon and keypadLoop(mon) or terminalCredential()
+      code = mon and keypadLoop(mon, server) or terminalCredential()
     end
 
     code = trim(code)
