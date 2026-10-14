@@ -86,6 +86,18 @@ local function readCardOnce(reader)
   return trim(code)
 end
 
+local function readCardOnInsertion(reader, cardState)
+  if not reader then return nil end
+  if not reader.hasCard() then
+    cardState.inserted = false
+    return nil
+  end
+  if cardState.inserted then return nil end
+
+  cardState.inserted = true
+  return readCardOnce(reader)
+end
+
 -- ---------- Terminal UI ----------
 local function terminalCredential()
   term.clear()
@@ -161,7 +173,7 @@ local function drawKeypad(mon, layout)
 end
 
 -- ---------- Keypad Loop ----------
-local function keypadLoop(mon, server)
+local function keypadLoop(mon, server, readerName, reader, cardState)
   tryScales(mon, {0.5, 0.75, 1})
   local w,h = mon.getSize()
   local layout = decideLayout(w,h)
@@ -210,7 +222,18 @@ local function keypadLoop(mon, server)
       if keyCode == keys.backspace then pin = pin:sub(1, #pin-1); refreshPIN()
       elseif keyCode == keys.enter then return pin end
 
+    elseif event == "smart_card_inserted" and reader and p1 == readerName then
+      local cardCode, cardError = readCardOnInsertion(reader, cardState)
+      if cardCode then return cardCode end
+      if cardError then print("[Keypad] Smart Card ignored: "..cardError) end
+
+    elseif event == "smart_card_removed" and reader and p1 == readerName then
+      cardState.inserted = false
+
     elseif event == "timer" and p1 == statusTimer then
+      local cardCode, cardError = readCardOnInsertion(reader, cardState)
+      if cardCode then return cardCode end
+      if cardError then print("[Keypad] Smart Card ignored: "..cardError) end
       requestStatus(server)
       geo = drawKeypad(mon, layout)
       refreshPIN()
@@ -256,6 +279,7 @@ local function main()
   config_util.openModems()
   local mon = peripheral.find("monitor")
   local readerName, reader = findCardManipulator()
+  local cardState = {inserted=false}
 
   local server = config_util.findServer(PROTOCOL, SERVER_NAME)
   if not server then
@@ -266,15 +290,19 @@ local function main()
   if readerName then print("[Keypad] Card reader found: "..readerName) end
 
   requestStatus(server)
+  if reader and type(reader.isIssued) == "function" then
+    print("[Keypad] Insert a Smart Card into the reader.")
+  end
 
   while true do
-    local code
-    if reader and reader.hasCard() then
-      local cardCode, err = readCardOnce(reader)
-      code = cardCode
-      if not cardCode and mon then drawKeypad(mon, decideLayout(mon.getSize())) end
-    else
-      code = mon and keypadLoop(mon, server) or terminalCredential()
+    local code, cardError = readCardOnInsertion(reader, cardState)
+    if cardError then print("[Keypad] Smart Card ignored: "..cardError) end
+    if not code then
+      if mon then
+        code = keypadLoop(mon, server, readerName, reader, cardState)
+      else
+        code = terminalCredential()
+      end
     end
 
     code = trim(code)
