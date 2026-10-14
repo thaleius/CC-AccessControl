@@ -101,7 +101,7 @@ doorauth_api_example.lua (optional)
 	```
 3. Select a program and choose whether to also copy it to `startup.lua` for automatic launch, or keep only its original filename. Choose `U` to update installed programs and the installer, or `I` to update only the installer. Confirm before program files are overwritten; configuration data is left untouched.
 4. When changing a script, push the update to the `main` branch before installing it. The installer fetches the files directly from GitHub.
-5. Run the selected program once - within 3 seconds, press any key to open its setup menu and adjust values (door tag, redstone side, protocol name, etc.), or let it auto-start with defaults.
+5. Run the selected program once - within 3 seconds, press any key to open its setup menu. Choose `U` there to download that program's latest version from GitHub, or adjust its settings; after an update, choose whether to reboot immediately.
 6. On `auth_server.lua`'s first run, set the admin PIN when prompted.
 7. Set the **same**, non-default `registration_secret` in `auth_server`, every `door_controller`, and `lockdown_alarm`. It authenticates controller registration and emergency lockdown requests.
 8. Attach modems and wiring; reboot all devices.

@@ -13,6 +13,15 @@
 
 local CONFIG_PATH = "doorauth_config.json"
 local SEEDED = false
+local UPDATE_BASE_URL = "https://raw.githubusercontent.com/thaleius/CC-AccessControl/main/"
+local UPDATE_FILES = {
+  admin_remote = "admin_remote.lua",
+  auth_server = "auth_server.lua",
+  door_controller = "door_controller.lua",
+  door_fob = "door_fob.lua",
+  keypad_door = "keypad_door.lua",
+  lockdown_alarm = "lockdown_alarm.lua",
+}
 
 ----------------------------------------------------------------
 -- File / JSON helpers
@@ -29,6 +38,66 @@ function writeAll(path, data)
   local h = fs.open(path, "w")
   h.write(data)
   h.close()
+end
+
+function updateProgram(filename)
+  local allowed = false
+  for _, program in pairs(UPDATE_FILES) do
+    if program == filename then allowed = true break end
+  end
+  if not allowed then return false, "This program cannot be updated from this menu." end
+  if not http or type(http.get) ~= "function" then
+    return false, "HTTP is unavailable or disabled."
+  end
+
+  local requestOk, response, requestError = pcall(http.get, UPDATE_BASE_URL..filename)
+  if not requestOk or not response then
+    return false, tostring(requestError or response or "Download failed.")
+  end
+
+  local code = response.getResponseCode and response.getResponseCode()
+  if code and (code < 200 or code >= 300) then
+    response.close()
+    return false, "GitHub returned HTTP "..code.."."
+  end
+
+  local contents = response.readAll()
+  response.close()
+  if type(contents) ~= "string" or not contents:match("^%s*%-%-") then
+    return false, "Downloaded content does not look like a Lua program."
+  end
+
+  local handle, openError = fs.open(filename, "w")
+  if not handle then return false, tostring(openError or "Cannot write program file.") end
+  handle.write(contents)
+  handle.close()
+
+  if readAll and fs.exists("doorauth_startup.txt") then
+    local startupProgram = readAll("doorauth_startup.txt")
+    if startupProgram == filename and fs.exists("startup.lua") then
+      writeAll("startup.lua", contents)
+    end
+  end
+
+  return true, filename.." updated. Restart the program to run the new version."
+end
+
+function enableTerminationProtection()
+  os.pullEvent = os.pullEventRaw
+  settings.set("shell.allow_disk_startup", false)
+  settings.save(".settings")
+end
+
+function runProtected(callback)
+  local ok, err = pcall(function()
+    enableTerminationProtection()
+    callback()
+  end)
+  if not ok then
+    printError(err)
+    sleep(5)
+  end
+  os.reboot()
 end
 
 function jsonEncode(tbl)
@@ -161,7 +230,8 @@ function load(section, defaults, fields, title)
         print(("%d) %-22s = %s"):format(i, field.label or field.key, fieldValue(cfg, field)))
       end
       print("")
-      print("S) Save and continue    Q) Continue without saving edits")
+      print("S) Save and continue    U) Update this program")
+      print("Q) Continue without saving edits")
       write("> ")
       local choice = trim(read())
       local idx = tonumber(choice)
@@ -177,6 +247,27 @@ function load(section, defaults, fields, title)
         print("Saved configuration.")
         sleep(0.5)
         break
+      elseif choice:lower() == "u" then
+        local filename = UPDATE_FILES[section]
+        if not filename then
+          print("No self-updater is configured for this program.")
+        else
+          local ok, message = updateProgram(filename)
+          print(message)
+          if ok then
+            local startupProgram = readAll("doorauth_startup.txt")
+            if startupProgram == filename then
+              print("Managed startup.lua was updated too.")
+            end
+            write("Reboot now to activate the update? (y/N) ")
+            if trim(read()):lower() == "y" then
+              root[section] = cfg
+              saveRoot(root)
+              os.reboot()
+            end
+          end
+        end
+        sleep(1)
       elseif choice:lower() == "q" or choice == "" then
         break
       end
