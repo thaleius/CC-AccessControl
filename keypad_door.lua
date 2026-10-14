@@ -5,6 +5,7 @@
 -- credential actually resolves to (door PIN, user code, or card token).
 
 os.loadAPI("config_util.lua")
+local function runProgram()
 
 ------------- Config -------------
 local defaults = {
@@ -297,3 +298,6 @@ local function main()
 end
 
 main()
+end
+
+config_util.runProtected(runProgram)

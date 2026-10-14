@@ -6,6 +6,7 @@
 -- forge an open" hole in earlier versions of this script.
 
 os.loadAPI("config_util.lua")
+local function runProgram()
 
 ------------- Config -------------
 local defaults = {
@@ -152,3 +153,6 @@ end
 
 
 main()
+end
+
+config_util.runProtected(runProgram)

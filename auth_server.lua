@@ -14,6 +14,7 @@
 --============================================================--
 
 os.loadAPI("config_util.lua")
+local function runProgram()
 
 ------------------ Config ------------------
 local defaults = {
@@ -1266,3 +1267,6 @@ loadAdmin()
 logEvent({event="server_start",ok=true,source="server"})
 
 parallel.waitForAny(netLoop, consoleLoop, autosaveLoop, heartbeatLoop)
+end
+
+config_util.runProtected(runProgram)

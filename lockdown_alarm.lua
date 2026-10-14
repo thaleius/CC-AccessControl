@@ -5,6 +5,7 @@
 -- is treated as a fault condition worth flagging, not a reason to go quiet.
 
 os.loadAPI("config_util.lua")
+local function runProgram()
 
 ------------- Config -------------
 local defaults = {
@@ -200,3 +201,6 @@ local function emergencyInputLoop()
 end
 
 parallel.waitForAny(statusLoop, emergencyInputLoop, sirenLoop)
+end
+
+config_util.runProtected(runProgram)

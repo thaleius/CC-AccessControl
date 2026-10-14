@@ -4,6 +4,7 @@
 -- calls transparently re-login once if the session token has expired.
 
 os.loadAPI("config_util.lua")
+local function runProgram()
 
 ------------- Config -------------
 local defaults = {
@@ -653,3 +654,6 @@ while true do
   local session=login()
   if session then mainMenu(session) end
 end
+end
+
+config_util.runProtected(runProgram)

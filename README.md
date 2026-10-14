@@ -123,6 +123,7 @@ doorauth_api_example.lua (optional)
 - Admin login uses a challenge/salt exchange with a freshness window and a replay cache, so a sniffed login exchange can't be replayed
 - Repeated failed door or admin login attempts are rate-limited and temporarily locked out (exponential backoff)
 - Controller registration requires a shared secret; door-open commands are addressed to a specific registered server ID and signed with a per-controller key + nonce
+- Security programs ignore Ctrl+T, disable `shell.allow_disk_startup`, and report an unhandled error before rebooting. The installer intentionally remains interruptible. This deters accidental termination, but cannot stop an operator from rebooting the computer, replacing files, or changing the mod/server.
 - Existing installs are migrated automatically: a legacy plaintext door-PIN database is hashed in place on first load after upgrading, and a legacy admin PIN hash is upgraded the first time you log in with it locally
 
 **Honesty note:** the hashing in `config_util.lua` is a salted, multi-lane mixing hash designed to run in CC:Tweaked's Lua 5.1 sandbox (no confirmed bitwise-operator support, no OS-level CSPRNG) - it is meaningfully stronger than a bare rolling hash, but it is **not** a cryptographic primitive suitable outside this game's threat model.

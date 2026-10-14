@@ -5,6 +5,7 @@
 -- don't have a card-manipulator peripheral attached).
 
 os.loadAPI("config_util.lua")
+local function runProgram()
 
 ------------- Config -------------
 local defaults = {
@@ -195,3 +196,6 @@ while true do
   read()
   ::continue::
 end
+end
+
+config_util.runProtected(runProgram)
