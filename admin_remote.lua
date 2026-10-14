@@ -75,6 +75,25 @@ local function writeCard(reader, token, label)
   return true
 end
 
+local function writeSmartCard(reader, token, label)
+  local waited = 0
+  while not reader.hasCard() and waited < 20 do
+    sleep(0.5)
+    waited = waited + 0.5
+  end
+  if not reader.hasCard() then return false, "No Smart Card inserted." end
+  if reader.isIssued() then return false, "Smart Card is already issued and cannot be rewritten." end
+
+  local source = ("local token = %s\nfunction handle(command, args, context)\n  if command == %q then return token end\n  return nil, %q\nend")
+    :format(textutils.serialize(token), "doorauth_token", "unknown_command")
+  local callOk, issued, err = pcall(reader.issueSource, source)
+  if not callOk then return false, issued end
+  if not issued then return false, err or "Smart Card issue failed." end
+
+  if type(reader.setLabel) == "function" then pcall(reader.setLabel, label) end
+  return true
+end
+
 ---------------------------------------------------
 -- LOGIN
 ---------------------------------------------------
@@ -346,6 +365,21 @@ local function issueCardFlow(session)
   if isPocketComputer() then
     print("Pocket computers can't drive a card manipulator.")
     print("Token (write this down): "..msg.token)
+    print("\nPress Enter...") read()
+    return
+  end
+
+  local smartCardReader = peripheral.find("smart_card_reader")
+  if smartCardReader then
+    print("Insert a blank CC SmartCard into the reader...")
+    local ok, writeErr = writeSmartCard(smartCardReader, msg.token, name)
+    if ok then
+      print("Smart Card issued for "..name..". It can only be issued once.")
+    else
+      print("Smart Card issue failed: "..tostring(writeErr))
+      print("Rolling back issued DoorAuth token...")
+      adminCmd(session, {cmd="user_card_clear", name=name})
+    end
     print("\nPress Enter...") read()
     return
   end

@@ -43,14 +43,14 @@ Every other script loads this with `os.loadAPI("config_util.lua")`. It provides:
 
 ### 4. Keypad Computers (Touchscreen Entry Terminals) — `keypad_door.lua`
 - Touchscreen numeric keypad, masked PIN entry
-- Optional magnetic-card reader support (same wire message either way - the server decides what the credential resolves to)
+- Optional legacy card-manipulator and CC SmartCard reader support; cards carry the same DoorAuth token checked by the server
 - On-screen lockdown banner via periodic status polling
 - Server-side verification, auto-reconnect
 
 ### 5. Pocket Admin Remote (Secure Admin Console) — `admin_remote.lua`
 - Challenge/salt login, auto-renewing session tokens
 - **Doors** menu: add/remove PINs, door open-time, remove door
-- **Users** menu: add/remove users, set/clear codes, issue/clear magnetic cards (writes and verifies a physical card if a manipulator peripheral is attached, otherwise prints the token), enable/disable per-door access, clone access between users, search
+- **Users** menu: add/remove users, set/clear codes, issue/clear cards (CC SmartCards are issued once; legacy manipulators write and verify), enable/disable per-door access, clone access between users, search
 - **Security** menu: remote door open, lockdown on/off
 - Audit log viewer
 
@@ -76,7 +76,10 @@ Loadable with `os.loadAPI("doorauth_api_example.lua")` for scripting the admin A
 - Wired/Wireless modems
 - Pocket computers
 - A card-reader/writer peripheral (optional, for magnetic-card credentials)
+- CC SmartCard (optional): a `smart_card_reader` on the admin remote for issuing and on the keypad for reading
 - A redstone button or lever and optional speaker for the lockdown alarm
+
+CC SmartCard is a separate mod for Minecraft 1.21.1 on NeoForge. Install it on the server and all clients; it requires CC:Tweaked 1.120.0 or newer.
 
 ## 📦 Included Files
 config_util.lua (shared library)
@@ -102,6 +105,7 @@ doorauth_api_example.lua (optional)
 6. On `auth_server.lua`'s first run, set the admin PIN when prompted.
 7. Set the **same**, non-default `registration_secret` in `auth_server`, every `door_controller`, and `lockdown_alarm`. It authenticates controller registration and emergency lockdown requests.
 8. Attach modems and wiring; reboot all devices.
+9. For CC SmartCard support, install CC SmartCard on the server and clients, attach its Smart Card Reader to the admin remote and keypad, and issue blank cards through the Users menu. DoorAuth tokens are returned to the reader computer when used, and issued cards cannot be rewritten; clearing/reissuing a DoorAuth token revokes the previous card at the server.
 
 ## 🧪 Testing Procedure
 1. Start the auth server

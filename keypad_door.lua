@@ -47,7 +47,9 @@ local requestStatus
 local function findCardManipulator()
   for _, name in ipairs(peripheral.getNames()) do
     local p = peripheral.wrap(name)
-    if p and type(p.hasCard) == "function" and type(p.readCard) == "function" then
+    if p and type(p.hasCard) == "function"
+       and (type(p.readCard) == "function"
+         or (type(p.isIssued) == "function" and type(p.call) == "function")) then
       return name, p
     end
   end
@@ -68,6 +70,14 @@ end
 
 local function readCardOnce(reader)
   if not reader.hasCard() then return nil end
+
+  if type(reader.isIssued) == "function" and type(reader.call) == "function" then
+    if not reader.isIssued() then return nil, "blank_smart_card" end
+    local ok, token = pcall(reader.call, "doorauth_token")
+    if not ok or type(token) ~= "string" then return nil, "invalid_smart_card" end
+    return trim(token)
+  end
+
   local ok, raw = pcall(reader.readCard)
   if not ok then return nil end
   local code = extractCardCode(raw)
