@@ -60,6 +60,9 @@ Every other script loads this with `os.loadAPI("config_util.lua")`. It provides:
 - A redstone button or lever on the configured emergency input side triggers a server-wide lockdown
 - Uses the server's `registration_secret` to authenticate emergency triggers
 - **Fails closed**: if it can't reach the server, the alarm output turns **on** rather than silently going quiet
+- Choose `classic`, `alternating`, or `rising` in the startup config, or select `custom` to use a hand-built sequence
+- In a custom sequence, separate steps with `;` and simultaneous tracks with `|`. Each track repeats independently. Steps are `tone <Hz> <wave> <seconds>`, `ramp <startHz> <endHz> <wave> <seconds>`, or `silence <seconds>`; supported waves are `sine`, `square`, `saw`, and `triangle`
+- Example: a rising alarm with a repeating 880 Hz pulse layered over it: `ramp 500 1800 saw 2; silence 1 | tone 880 sine 0.25; silence 0.75`
 
 ### 7. Door Fob (Player Access Device) — `door_fob.lua`
 - Auto-discovers doors from the server

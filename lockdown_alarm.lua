@@ -16,6 +16,8 @@ local defaults = {
   output_side     = "back",
   emergency_input_side = "top",
   registration_secret = "change-me-registration-secret",
+  alarm_tone = "classic",
+  custom_sequence = "ramp 500 1800 saw 2; silence 1 | tone 880 sine 0.25; silence 0.75",
 }
 
 local fields = {
@@ -29,6 +31,10 @@ local fields = {
     help="A redstone button or lever on this side triggers lockdown."},
   {key="registration_secret", label="Emergency registration secret",
     help="Must match auth_server's registration_secret."},
+  {key="alarm_tone", label="Alarm sound (classic/alternating/rising/custom)",
+    help="Choose classic, alternating, rising, or custom."},
+  {key="custom_sequence", label="Custom sound sequence",
+    help="Tracks separated by '|'; steps by ';'. Steps: tone <Hz> <wave> <seconds>, ramp <startHz> <endHz> <wave> <seconds>, silence <seconds>. Waves: sine, square, saw, triangle."},
 }
 
 local cfg = config_util.load("lockdown_alarm", defaults, fields, "Lockdown Alarm Config")
@@ -70,14 +76,97 @@ end
 local speaker = peripheral.find("speaker")
 local alarmActive = true
 
-local function makeSawtoothWave(frequency)
-  local sampleRate = 48000
-  local samples = {}
-  for index = 0, sampleRate / 2 - 1 do
-    local phase = (index * frequency / sampleRate) % 1
-    samples[index + 1] = math.floor(phase * 255) - 127
+local SAMPLE_RATE = 48000
+local AUDIO_CHUNK_SECONDS = 0.5
+local VALID_WAVES = {sine=true, square=true, saw=true, triangle=true}
+local SINE_TABLE = {}
+for index = 0, 255 do
+  SINE_TABLE[index + 1] = math.sin(index * math.pi * 2 / 256)
+end
+
+local function parseSequence(sequenceText)
+  local tracks = {}
+  for trackText in (sequenceText.."|"):gmatch("(.-)|") do
+    local track = {}
+    for stepText in (trackText..";"):gmatch("(.-);") do
+      local parts = {}
+      for part in stepText:gmatch("%S+") do parts[#parts + 1] = part:lower() end
+      if #parts > 0 then
+        local step = {kind=parts[1]}
+        if step.kind == "silence" and #parts == 2 then
+          step.duration = tonumber(parts[2])
+        elseif step.kind == "tone" and #parts == 4 then
+          step.startFrequency = tonumber(parts[2])
+          step.endFrequency = step.startFrequency
+          step.wave = parts[3]
+          step.duration = tonumber(parts[4])
+        elseif step.kind == "ramp" and #parts == 5 then
+          step.startFrequency = tonumber(parts[2])
+          step.endFrequency = tonumber(parts[3])
+          step.wave = parts[4]
+          step.duration = tonumber(parts[5])
+        else
+          return nil, "Invalid step: "..stepText
+        end
+
+        if not step.duration or step.duration < 0.05 or step.duration > 30 then
+          return nil, "Step duration must be between 0.05 and 30 seconds."
+        end
+        if step.kind ~= "silence" then
+          if not VALID_WAVES[step.wave] then return nil, "Unknown wave: "..tostring(step.wave) end
+          if not step.startFrequency or not step.endFrequency
+            or step.startFrequency < 20 or step.startFrequency > 12000
+            or step.endFrequency < 20 or step.endFrequency > 12000 then
+            return nil, "Frequencies must be between 20 and 12000 Hz."
+          end
+        end
+        track[#track + 1] = step
+        if #track > 32 then return nil, "A track can contain at most 32 steps." end
+      end
+    end
+    if #track > 0 then tracks[#tracks + 1] = track end
+    if #tracks > 8 then return nil, "A sequence can contain at most 8 tracks." end
   end
-  return samples
+  if #tracks == 0 then return nil, "The sequence is empty." end
+  return tracks
+end
+
+local function getAlarmSequence()
+  local presets = {
+    classic = "tone 1960 saw 0.35; tone 980 saw 0.35; silence 0.15",
+    alternating = "tone 1200 square 0.25; tone 1800 square 0.25; tone 2400 square 0.25; tone 1800 square 0.25; silence 0.2",
+    rising = "ramp 450 1800 saw 2; silence 1",
+  }
+  local choice = config_util.trim(cfg.alarm_tone):lower()
+  local sequenceText = presets[choice]
+  if choice == "custom" then sequenceText = cfg.custom_sequence end
+  if not sequenceText then
+    print("[Alarm] Unknown alarm sound; using classic.")
+    sequenceText = presets.classic
+  end
+  local sequence, err = parseSequence(sequenceText)
+  if not sequence then
+    print("[Alarm] Invalid sound sequence: "..err.." Using classic.")
+    sequence = assert(parseSequence(presets.classic))
+  end
+  return sequence
+end
+
+local function waveSample(step, elapsed, phase)
+  local progress = math.min(1, elapsed / step.duration)
+  local frequency = step.startFrequency + (step.endFrequency - step.startFrequency) * progress
+  phase = (phase + frequency / SAMPLE_RATE) % 1
+  local value
+  if step.wave == "sine" then
+    value = SINE_TABLE[math.floor(phase * 256) + 1]
+  elseif step.wave == "square" then
+    value = phase < 0.5 and 1 or -1
+  elseif step.wave == "triangle" then
+    value = 1 - 4 * math.abs(phase - 0.5)
+  else
+    value = phase * 2 - 1
+  end
+  return value, phase
 end
 
 local function waitForAudioChunk()
@@ -101,6 +190,61 @@ local function playAudioChunk(samples)
       return
     end
     waitForAudioChunk()
+  end
+end
+
+local function playSequence(tracks)
+  local totalDurations = {}
+  local cursors = {}
+  local phases = {}
+  for trackIndex, track in ipairs(tracks) do
+    local totalDuration = 0
+    for _, step in ipairs(track) do totalDuration = totalDuration + step.duration end
+    totalDurations[trackIndex] = totalDuration
+    cursors[trackIndex] = {stepIndex=1, stepStart=0, stepEnd=track[1].duration}
+    phases[trackIndex] = 0
+  end
+
+  local sampleCount = math.floor(SAMPLE_RATE * AUDIO_CHUNK_SECONDS)
+  local normalization = math.sqrt(#tracks)
+  local elapsed = 0
+  while alarmActive do
+    local samples = {}
+    for sampleIndex = 0, sampleCount - 1 do
+      local sampleTime = elapsed + sampleIndex / SAMPLE_RATE
+      local mixed = 0
+      for trackIndex, track in ipairs(tracks) do
+        local cursor = cursors[trackIndex]
+        local trackTime = sampleTime % totalDurations[trackIndex]
+        if trackTime < cursor.stepStart then
+          cursor.stepIndex = 1
+          cursor.stepStart = 0
+          cursor.stepEnd = track[1].duration
+        end
+        while trackTime >= cursor.stepEnd do
+          cursor.stepStart = cursor.stepEnd
+          cursor.stepIndex = cursor.stepIndex + 1
+          if cursor.stepIndex > #track then
+            cursor.stepIndex = 1
+            cursor.stepStart = 0
+            cursor.stepEnd = track[1].duration
+          else
+            cursor.stepEnd = cursor.stepEnd + track[cursor.stepIndex].duration
+          end
+        end
+
+        local step = track[cursor.stepIndex]
+        if step.kind ~= "silence" then
+          local value
+          value, phases[trackIndex] = waveSample(step, trackTime - cursor.stepStart, phases[trackIndex])
+          mixed = mixed + value
+        end
+      end
+      mixed = mixed / normalization
+      samples[sampleIndex + 1] = math.floor(math.max(-1, math.min(1, mixed)) * 127)
+    end
+    playAudioChunk(samples)
+    elapsed = elapsed + AUDIO_CHUNK_SECONDS
   end
 end
 
@@ -158,18 +302,10 @@ local function sirenLoop()
     while true do sleep(60) end
   end
 
-  local samples1960 = makeSawtoothWave(1960)
-  local samples980 = makeSawtoothWave(980)
+  local tracks = getAlarmSequence()
   while true do
     if alarmActive then
-      for index = 1, 8 do
-        if not alarmActive then break end
-        playAudioChunk(index % 2 == 1 and samples1960 or samples980)
-      end
-      for _ = 1, 5 do
-        if not alarmActive then break end
-        playAudioChunk(samples980)
-      end
+      playSequence(tracks)
     else
       sleep(0.1)
     end
