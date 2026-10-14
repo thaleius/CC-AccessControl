@@ -92,11 +92,13 @@ function enableTerminationProtection()
 end
 
 function runProtected(callback)
+  local isPocketComputer = pocket ~= nil
   local ok, err = pcall(function()
-    enableTerminationProtection()
+    if not isPocketComputer then enableTerminationProtection() end
     callback()
   end)
   if not ok and err ~= REBOOT_REQUESTED then
+    if isPocketComputer then error(err, 0) end
     printError(err)
     sleep(5)
   end
