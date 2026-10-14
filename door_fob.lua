@@ -173,7 +173,7 @@ while true do
   local code = askCredential()
   term.clear()
   term.setCursorPos(1,1)
-  print("Sending…")
+  print("Sending...")
 
   local ok, err = sendVerify(door, code)
 
@@ -187,12 +187,12 @@ while true do
     print("Error: "..err)
   elseif ok then
     print("ACCESS GRANTED")
-    print("Door opening…")
+    print("Door opening...")
   else
     print("ACCESS DENIED"..(err and (" ("..err..")") or ""))
   end
 
-  print("\nPress Enter…")
+  print("\nPress Enter...")
   read()
   ::continue::
 end
