@@ -13,6 +13,7 @@
 
 local CONFIG_PATH = "doorauth_config.json"
 local SEEDED = false
+local REBOOT_REQUESTED = {}
 local UPDATE_BASE_URL = "https://raw.githubusercontent.com/thaleius/CC-AccessControl/main/"
 local UPDATE_FILES = {
   admin_remote = "admin_remote.lua",
@@ -72,11 +73,13 @@ function updateProgram(filename)
   handle.write(contents)
   handle.close()
 
-  if readAll and fs.exists("doorauth_startup.txt") then
-    local startupProgram = readAll("doorauth_startup.txt")
-    if startupProgram == filename and fs.exists("startup.lua") then
-      writeAll("startup.lua", contents)
-    end
+  local startupProgram = readAll("doorauth_startup.txt")
+  local runningProgram = type(shell) == "table"
+    and type(shell.getRunningProgram) == "function"
+    and shell.getRunningProgram()
+  local runningAsStartup = runningProgram and fs.getName(runningProgram) == "startup.lua"
+  if fs.exists("startup.lua") and (startupProgram == filename or runningAsStartup) then
+    writeAll("startup.lua", contents)
   end
 
   return true, filename.." updated. Restart the program to run the new version."
@@ -93,11 +96,15 @@ function runProtected(callback)
     enableTerminationProtection()
     callback()
   end)
-  if not ok then
+  if not ok and err ~= REBOOT_REQUESTED then
     printError(err)
     sleep(5)
   end
   os.reboot()
+end
+
+function requestProtectedReboot()
+  error(REBOOT_REQUESTED, 0)
 end
 
 function jsonEncode(tbl)
@@ -255,16 +262,11 @@ function load(section, defaults, fields, title)
           local ok, message = updateProgram(filename)
           print(message)
           if ok then
-            local startupProgram = readAll("doorauth_startup.txt")
-            if startupProgram == filename then
-              print("Managed startup.lua was updated too.")
-            end
-            write("Reboot now to activate the update? (y/N) ")
-            if trim(read()):lower() == "y" then
-              root[section] = cfg
-              saveRoot(root)
-              os.reboot()
-            end
+            root[section] = cfg
+            saveRoot(root)
+            print("Rebooting to activate the update...")
+            sleep(1)
+            requestProtectedReboot()
           end
         end
         sleep(1)
