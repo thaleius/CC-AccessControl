@@ -284,6 +284,7 @@ local function normalizeValue(raw, current)
 end
 
 local function fieldValue(cfg, field)
+  if field.key == "registration_secret" then return "[hidden]" end
   local v = cfg[field.key]
   if v == nil then return "" end
   if type(v) == "boolean" then return v and "true" or "false" end
