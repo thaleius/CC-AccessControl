@@ -17,6 +17,7 @@ local REBOOT_REQUESTED = {}
 local TERMINATION_REQUESTED = {}
 local UPDATE_BASE_URL = "https://raw.githubusercontent.com/thaleius/CC-AccessControl/main/"
 local UPDATE_FILES = {
+  config_util = "config_util.lua",
   admin_remote = "admin_remote.lua",
   auth_server = "auth_server.lua",
   door_controller = "door_controller.lua",
@@ -52,38 +53,60 @@ function updateProgram(filename)
     return false, "HTTP is unavailable or disabled."
   end
 
-  local requestOk, response, requestError = pcall(http.get, UPDATE_BASE_URL..filename)
-  if not requestOk or not response then
-    return false, tostring(requestError or response or "Download failed.")
+  local files = {filename}
+  if filename ~= UPDATE_FILES.config_util then
+    files[#files + 1] = UPDATE_FILES.config_util
   end
 
-  local code = response.getResponseCode and response.getResponseCode()
-  if code and (code < 200 or code >= 300) then
+  local downloads = {}
+  for _, updateFile in ipairs(files) do
+    local requestOk, response, requestError = pcall(http.get, UPDATE_BASE_URL..updateFile)
+    if not requestOk or not response then
+      return false, tostring(requestError or response or "Download failed.")
+    end
+
+    local code = response.getResponseCode and response.getResponseCode()
+    if code and (code < 200 or code >= 300) then
+      response.close()
+      return false, "GitHub returned HTTP "..code.." for "..updateFile.."."
+    end
+
+    local contents = response.readAll()
     response.close()
-    return false, "GitHub returned HTTP "..code.."."
+    if type(contents) ~= "string" or not contents:match("^%s*%-%-") then
+      return false, "Downloaded "..updateFile.." does not look like a Lua program."
+    end
+    downloads[updateFile] = contents
   end
 
-  local contents = response.readAll()
-  response.close()
-  if type(contents) ~= "string" or not contents:match("^%s*%-%-") then
-    return false, "Downloaded content does not look like a Lua program."
+  for _, updateFile in ipairs(files) do
+    local handle, openError = fs.open(updateFile, "w")
+    if not handle then return false, tostring(openError or ("Cannot write "..updateFile..".")) end
+    handle.write(downloads[updateFile])
+    handle.close()
   end
 
-  local handle, openError = fs.open(filename, "w")
-  if not handle then return false, tostring(openError or "Cannot write program file.") end
-  handle.write(contents)
-  handle.close()
-
-  local startupProgram = readAll("doorauth_startup.txt")
+  local startupProgram = trim(readAll("doorauth_startup.txt") or "")
   local runningProgram = type(shell) == "table"
     and type(shell.getRunningProgram) == "function"
     and shell.getRunningProgram()
   local runningAsStartup = runningProgram and fs.getName(runningProgram) == "startup.lua"
-  if fs.exists("startup.lua") and (startupProgram == filename or runningAsStartup) then
-    writeAll("startup.lua", contents)
+  local updatedStartup = false
+  if filename ~= "config_util.lua" and fs.exists("startup.lua")
+    and (startupProgram == filename or runningAsStartup) then
+    local handle, openError = fs.open("startup.lua", "w")
+    if not handle then
+      return false, filename.." updated, but startup.lua could not be opened: "
+        ..tostring(openError or "unknown error")
+    end
+    handle.write(downloads[filename])
+    handle.close()
+    updatedStartup = true
   end
 
-  return true, filename.." updated. Restart the program to run the new version."
+  local updatedFiles = table.concat(files, " and ")
+  if updatedStartup then updatedFiles = updatedFiles.." and startup.lua" end
+  return true, updatedFiles.." updated. Restart the program to run the new version."
 end
 
 function enableTerminationProtection()
@@ -307,7 +330,9 @@ function load(section, defaults, fields, title)
         print(("%d) %-22s = %s"):format(i, field.label or field.key, fieldValue(cfg, field)))
       end
       print("")
-      print("S) Save and continue    U) Update this program")
+      print("S) Save and continue")
+      print("U) Update this program")
+      print("C) Update config_util.lua")
       print("Q) Continue without saving edits")
       write("> ")
       local choice = trim(read())
@@ -324,8 +349,8 @@ function load(section, defaults, fields, title)
         print("Saved configuration.")
         sleep(0.5)
         break
-      elseif choice:lower() == "u" then
-        local filename = UPDATE_FILES[section]
+      elseif choice:lower() == "u" or choice:lower() == "c" then
+        local filename = choice:lower() == "c" and UPDATE_FILES.config_util or UPDATE_FILES[section]
         if not filename then
           print("No self-updater is configured for this program.")
         else
