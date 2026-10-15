@@ -14,6 +14,7 @@
 local CONFIG_PATH = "doorauth_config.json"
 local SEEDED = false
 local REBOOT_REQUESTED = {}
+local TERMINATION_REQUESTED = {}
 local UPDATE_BASE_URL = "https://raw.githubusercontent.com/thaleius/CC-AccessControl/main/"
 local UPDATE_FILES = {
   admin_remote = "admin_remote.lua",
@@ -86,7 +87,73 @@ function updateProgram(filename)
 end
 
 function enableTerminationProtection()
-  os.pullEvent = os.pullEventRaw
+  local pullEventRaw = os.pullEventRaw
+  local handlingTermination = false
+
+  local function isAdminPinValid(pin)
+    local root = jsonDecode(readAll(CONFIG_PATH))
+    if type(root) ~= "table" then root = {} end
+    local adminConfig = type(root.auth_server) == "table" and root.auth_server or {}
+    local adminPath = adminConfig.admin_path or "admin.json"
+    local adminRecord = jsonDecode(readAll(adminPath))
+    if checkSecret(pin, adminRecord) then return true end
+
+    local programName = type(shell) == "table"
+      and type(shell.getRunningProgram) == "function"
+      and shell.getRunningProgram()
+    programName = programName and fs.getName(programName) or nil
+    if programName == "startup.lua" then
+      local startupProgram = readAll("doorauth_startup.txt")
+      if startupProgram then programName = trim(startupProgram) end
+    end
+
+    local section = programName and programName:gsub("%.lua$", "")
+    local programConfig = section and type(root[section]) == "table" and root[section] or {}
+    local protocol = programConfig.protocol or "doorAuth.v1"
+    local serverName = programConfig.server_name or programConfig.host_name or "DoorAuthServer"
+    local timeout = tonumber(programConfig.request_timeout) or 3
+
+    openModems()
+    local server = findServer(protocol, serverName, 10)
+    if not server then return false end
+
+    rednet.send(server, {type="admin_login_challenge"}, protocol)
+    local challengeId, challenge = rednet.receive(protocol, timeout)
+    if challengeId ~= server or type(challenge) ~= "table"
+      or challenge.type ~= "admin_login_challenge_salt" or not challenge.salt then
+      return false
+    end
+
+    local stamp = tostring(os.epoch("utc"))
+    local signature = hash(hash(pin, challenge.salt)..stamp, "")
+    rednet.send(server, {type="admin_login", timestamp=stamp, sig=signature}, protocol)
+    local responseId, response = rednet.receive(protocol, timeout)
+    return responseId == server and type(response) == "table"
+      and response.type == "admin_login_ok"
+  end
+
+  os.pullEvent = function(filter)
+    while true do
+      local eventData = {pullEventRaw()}
+      local event = eventData[1]
+      if event == "terminate" then
+        if not handlingTermination then
+          handlingTermination = true
+          write("\nAdmin PIN to stop this program: ")
+          local inputOk, pin = pcall(read, "*")
+          local authOk, valid = false, false
+          if inputOk then authOk, valid = pcall(isAdminPinValid, pin) end
+          handlingTermination = false
+
+          if authOk and valid then error(TERMINATION_REQUESTED, 0) end
+          print("Incorrect PIN or authentication server unavailable.")
+        end
+      elseif not filter or event == filter then
+        return unpack(eventData)
+      end
+    end
+  end
+
   settings.set("shell.allow_disk_startup", false)
   settings.save(".settings")
 end
@@ -97,6 +164,7 @@ function runProtected(callback)
     if not isPocketComputer then enableTerminationProtection() end
     callback()
   end)
+  if err == TERMINATION_REQUESTED then return end
   if not ok and err ~= REBOOT_REQUESTED then
     if isPocketComputer then error(err, 0) end
     printError(err)
